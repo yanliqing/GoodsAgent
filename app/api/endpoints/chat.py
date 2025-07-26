@@ -1,4 +1,5 @@
 from typing import Any, List
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from app.schemas.chat import (
 )
 from app.services.chat import ChatService
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -33,9 +35,33 @@ async def send_message(
     Returns:
         聊天响应
     """
-    chat_service = ChatService(db)
-    response = await chat_service.process_chat(current_user.id, chat_request)
-    return response
+    logger.info("=" * 80)
+    logger.info("📨 接收到聊天消息请求")
+    logger.info(f"👤 用户ID: {current_user.id}")
+    logger.info(f"👤 用户名: {current_user.username}")
+    logger.info(f"🆔 会话ID: {chat_request.session_id}")
+    logger.info(f"📝 消息内容: {chat_request.message}")
+    logger.info(f"📋 消息类型: {chat_request.message_type}")
+    logger.info(f"📊 元数据: {chat_request.metadata}")
+    logger.info("=" * 80)
+    
+    try:
+        chat_service = ChatService(db)
+        logger.info("🔄 开始处理聊天请求...")
+        response = await chat_service.process_chat(current_user.id, chat_request)
+        logger.info("✅ 聊天请求处理完成")
+        logger.info(f"📤 响应消息类型: {response.message_type}")
+        logger.info(f"📤 响应消息长度: {len(response.message)} 字符")
+        logger.info(f"📊 响应元数据: {response.metadata}")
+        logger.info("=" * 80)
+        return response
+        
+    except Exception as e:
+        logger.error("❌ 聊天消息处理失败")
+        logger.error(f"🚨 错误详情: {str(e)}")
+        logger.error(f"🔍 错误类型: {type(e).__name__}")
+        logger.error("=" * 80)
+        raise
 
 
 @router.post("/image-search", response_model=ChatResponse)
@@ -54,18 +80,43 @@ async def image_search(
     Returns:
         聊天响应
     """
-    # 创建聊天请求
-    chat_request = ChatRequest(
-        session_id=search_request.session_id,
-        message=search_request.message or "请帮我找一下这张图片中的商品",
-        message_type="image",
-        metadata={"image_data": search_request.image_data}
-    )
+    logger.info("=" * 80)
+    logger.info("🖼️ 接收到图片搜索请求")
+    logger.info(f"👤 用户ID: {current_user.id}")
+    logger.info(f"👤 用户名: {current_user.username}")
+    logger.info(f"🆔 会话ID: {search_request.session_id}")
+    logger.info(f"📝 搜索消息: {search_request.message}")
+    logger.info(f"📊 图片数据长度: {len(search_request.image_data)} 字符")
+    logger.info("=" * 80)
     
-    # 处理请求
-    chat_service = ChatService(db)
-    response = await chat_service.process_chat(current_user.id, chat_request)
-    return response
+    try:
+        # 创建聊天请求
+        chat_request = ChatRequest(
+            session_id=search_request.session_id,
+            message=search_request.message or "请帮我找一下这张图片中的商品",
+            message_type="image",
+            metadata={"image_data": search_request.image_data}
+        )
+        
+        logger.info("🔄 转换为聊天请求，开始处理...")
+        
+        # 处理请求
+        chat_service = ChatService(db)
+        response = await chat_service.process_chat(current_user.id, chat_request)
+        
+        logger.info("✅ 图片搜索请求处理完成")
+        logger.info(f"📤 响应消息类型: {response.message_type}")
+        logger.info(f"📤 响应消息长度: {len(response.message)} 字符")
+        logger.info(f"📊 响应元数据: {response.metadata}")
+        logger.info("=" * 80)
+        return response
+        
+    except Exception as e:
+        logger.error("❌ 图片搜索处理失败")
+        logger.error(f"🚨 错误详情: {str(e)}")
+        logger.error(f"🔍 错误类型: {type(e).__name__}")
+        logger.error("=" * 80)
+        raise
 
 
 @router.get("/sessions", response_model=List[SessionSchema])

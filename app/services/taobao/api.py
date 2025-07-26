@@ -60,8 +60,15 @@ class TaobaoAPI:
         try:
             request_params = self._prepare_request(method, params)
             
-            # 记录API调用日志
-            logger.info(f"调用淘宝API: {method}, 参数: {params}")
+            # 记录详细的API调用日志
+            logger.info("=" * 80)
+            logger.info(f"🚀 开始调用淘宝API")
+            logger.info(f"📡 接口名称: {method}")
+            logger.info(f"🌐 请求URL: {self.BASE_URL}")
+            logger.info(f"📝 业务参数: {json.dumps(params, ensure_ascii=False, indent=2)}")
+            logger.info(f"🔧 完整请求参数: {json.dumps({k: v for k, v in request_params.items() if k != 'sign'}, ensure_ascii=False, indent=2)}")
+            logger.info(f"🔐 签名: {request_params.get('sign', 'N/A')}")
+            logger.info("=" * 80)
             
             response = requests.post(
                 self.BASE_URL, 
@@ -77,14 +84,23 @@ class TaobaoAPI:
             # 记录API响应日志
             if "error_response" in result:
                 error_info = result["error_response"]
-                logger.error(f"淘宝API错误: {error_info}")
+                logger.error("=" * 80)
+                logger.error(f"❌ 淘宝API调用失败")
+                logger.error(f"📡 接口名称: {method}")
+                logger.error(f"🚨 错误信息: {json.dumps(error_info, ensure_ascii=False, indent=2)}")
+                logger.error("=" * 80)
                 raise TaobaoAPIError(
                     message=f"淘宝API调用失败: {error_info.get('msg', '未知错误')}",
                     error_code=error_info.get('code', 'UNKNOWN'),
                     details=error_info
                 )
             
-            logger.info(f"淘宝API调用成功: {method}")
+            logger.info("=" * 80)
+            logger.info(f"✅ 淘宝API调用成功")
+            logger.info(f"📡 接口名称: {method}")
+            logger.info(f"📊 响应数据大小: {len(json.dumps(result))} 字符")
+            logger.info(f"🔍 响应键: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+            logger.info("=" * 80)
             return result
             
         except requests.exceptions.Timeout:
@@ -138,38 +154,53 @@ class TaobaoAPI:
             "sort": "total_sales_des",  # 排序方式：销量从高到低
         }
         
+        logger.info("🔍 开始搜索淘宝商品")
+        logger.info(f"🔤 搜索关键词: {query}")
+        logger.info(f"📄 页码: {page_no}, 每页数量: {page_size}")
+        
         try:
             response = self._request(method, params)
-            logger.info(f"淘宝API调用成功: {method}")
-            logger.info(f"API响应内容: {response}")  # 添加调试信息
             
             # 解析响应
             response_key = "tbk_dg_material_optional_upgrade_response"  # 修正响应键格式
             if response_key not in response:
-                logger.warning(f"API响应格式错误: 缺少 {response_key}")
-                logger.warning(f"实际响应键: {list(response.keys()) if isinstance(response, dict) else type(response)}")
-                return self._get_fallback_products(query, page_size)
+                logger.warning("⚠️ API响应格式错误")
+                logger.warning(f"🔍 期望的响应键: {response_key}")
+                logger.warning(f"📋 实际响应键: {list(response.keys()) if isinstance(response, dict) else type(response)}")
+                logger.warning(f"📄 完整响应内容: {json.dumps(response, ensure_ascii=False, indent=2)}")
+                return []  # 直接返回空列表，不返回模拟数据
             
             response_data = response[response_key]
+            logger.info(f"📊 API响应数据结构: {list(response_data.keys()) if isinstance(response_data, dict) else 'N/A'}")
             
             # 检查是否有结果数据
             if "result_list" not in response_data or not response_data["result_list"]:
-                logger.info(f"没有找到相关商品: {query}")
-                return self._get_fallback_products(query, page_size)
+                logger.info(f"📭 没有找到相关商品，关键词: {query}")
+                logger.info(f"📄 响应数据: {json.dumps(response_data, ensure_ascii=False, indent=2)}")
+                return []  # 直接返回空列表，不返回模拟数据
             
             # 解析商品列表
             result_list = response_data["result_list"]
+            logger.info(f"📋 结果列表结构: {list(result_list.keys()) if isinstance(result_list, dict) else 'N/A'}")
             products = []
             
             if "map_data" in result_list:
                 items = result_list["map_data"]
+                logger.info(f"🛍️ 获取到 {len(items)} 个商品数据")
                 
-                for item in items:
+                for i, item in enumerate(items):
                     try:
+                        logger.debug(f"📦 解析第 {i+1} 个商品数据")
+                        logger.debug(f"🔍 商品原始数据: {json.dumps(item, ensure_ascii=False, indent=2)}")
+                        
                         # 获取基本信息
                         basic_info = item.get("item_basic_info", {})
                         price_info = item.get("price_promotion_info", {})
                         publish_info = item.get("publish_info", {})
+                        
+                        logger.debug(f"📝 基本信息: {json.dumps(basic_info, ensure_ascii=False, indent=2)}")
+                        logger.debug(f"💰 价格信息: {json.dumps(price_info, ensure_ascii=False, indent=2)}")
+                        logger.debug(f"🔗 发布信息: {json.dumps(publish_info, ensure_ascii=False, indent=2)}")
                         
                         # 解析商品信息
                         product = ProductBase(
@@ -200,164 +231,145 @@ class TaobaoAPI:
                             }
                         )
                         products.append(product)
+                        logger.debug(f"✅ 成功解析商品: {product.title} (ID: {product.item_id})")
                     except Exception as item_error:
-                        logger.warning(f"解析商品数据失败: {item_error}")
+                        logger.warning(f"⚠️ 解析第 {i+1} 个商品数据失败: {item_error}")
+                        logger.warning(f"📄 问题商品数据: {json.dumps(item, ensure_ascii=False, indent=2)}")
                         continue
             
-            logger.info(f"成功获取 {len(products)} 个商品，查询: {query}")
-            return products if products else self._get_fallback_products(query, page_size)
+            logger.info("=" * 80)
+            logger.info(f"🎉 商品搜索完成")
+            logger.info(f"🔤 搜索关键词: {query}")
+            logger.info(f"📊 成功获取: {len(products)} 个商品")
+            logger.info(f"📋 商品列表:")
+            for i, product in enumerate(products[:5]):  # 只显示前5个商品的摘要
+                logger.info(f"  {i+1}. {product.title[:50]}... (¥{product.price})")
+            if len(products) > 5:
+                logger.info(f"  ... 还有 {len(products) - 5} 个商品")
+            logger.info("=" * 80)
+            return products  # 直接返回真实数据，如果为空就是空列表
             
         except TaobaoAPIError as e:
-            logger.error(f"淘宝API错误: {e.message}")
-            # 如果是API错误，返回模拟数据作为备用
-            return self._get_fallback_products(query, page_size)
+            logger.error(f"❌ 淘宝API错误: {e.message}")
+            logger.error(f"🔤 搜索关键词: {query}")
+            # API错误时返回空列表，不返回模拟数据
+            return []
         except Exception as e:
-            logger.error(f"搜索物料失败: {e}")
-            # 如果是其他错误，也返回模拟数据作为备用
-            return self._get_fallback_products(query, page_size)
-    
-    def _get_fallback_products(self, query: str, page_size: int) -> List[ProductBase]:
-        """当API调用失败时返回的备用模拟数据"""
-        products = [
-            ProductBase(
-                item_id=f"fallback_item_{i}",
-                title=f"{query}相关商品{i} (模拟数据)",
-                price=f"{(100 + i * 10):.2f}",
-                original_price=f"{(150 + i * 10):.2f}",
-                description=f"{query}商品描述{i} (API调用失败，显示模拟数据)",
-                image_url=f"https://example.com/image_{i}.jpg",
-                detail_url=f"https://item.taobao.com/item.htm?id={i}",
-                category="测试分类",
-                shop_name=f"测试店铺{i}",
-                rating=f"{4 + i % 2}",
-                sales=f"{1000 + i * 100}",
-                metadata={
-                    "promotion": "满300减30",
-                    "shipping": "免运费",
-                    "fallback": "true"
-                }
-            )
-            for i in range(1, min(page_size + 1, 6))  # 限制备用数据数量
-        ]
-        return products
+            logger.error(f"❌ 搜索物料失败: {e}")
+            logger.error(f"🔤 搜索关键词: {query}")
+            logger.error(f"📄 错误详情: {str(e)}")
+            # 其他错误时也返回空列表，不返回模拟数据
+            return []
+
     
     def search_by_image(self, image_data: str) -> List[ProductBase]:
         """通过图片搜索商品
         
-        注意：淘宝目前没有直接的图片搜索API，这里模拟实现
-        实际应用中可能需要使用其他第三方服务或淘宝官方合作
+        Args:
+            image_data: base64编码的图片数据
+            
+        Returns:
+            商品列表
         """
-        # 模拟图片搜索结果
-        products = [
-            ProductBase(
-                item_id=f"img_item_{i}",
-                title=f"图片搜索商品{i}",
-                price=f"{(120 + i * 15):.2f}",
-                original_price=f"{(180 + i * 15):.2f}",
-                description=f"与图片相似的商品{i}",
-                image_url=f"https://example.com/similar_image_{i}.jpg",
-                detail_url=f"https://item.taobao.com/item.htm?id=img_{i}",
-                category="图片搜索",
-                shop_name=f"图片商品店铺{i}",
-                rating=f"{4.5}",
-                sales=f"{800 + i * 120}",
-                metadata={
-                    "similarity": f"{90 - i * 5}%",
-                    "promotion": "新品促销"
-                }
-            )
-            for i in range(1, 6)
-        ]
-        return products
+        from app.core.logging import get_logger
+        
+        logger = get_logger(__name__)
+        
+        logger.info("=" * 80)
+        logger.info("🖼️ 开始图片搜索")
+        logger.info(f"📊 图片数据大小: {len(image_data)} 字符")
+        logger.info("⚠️ 图片搜索功能暂未实现真实API")
+        logger.info("=" * 80)
+        
+        try:
+            # 这里应该调用真实的图片搜索API
+            # 目前没有真实API，直接返回空列表
+            logger.info("📭 返回空结果（未实现真实API）")
+            return []
+            
+        except Exception as e:
+            logger.error(f"❌ 图片搜索失败: {e}")
+            return []
     
     def get_product_details(self, item_id: str) -> Optional[ProductBase]:
         """获取商品详情
         
         使用淘宝商品详情API (taobao.item.get)
         """
+        from app.core.logging import get_logger
+        
+        logger = get_logger(__name__)
+        
         method = "taobao.item.get"
         params = {
             "num_iid": item_id,
             "fields": "num_iid,title,price,original_price,desc,pic_url,detail_url,cid,seller_cids,props,props_name"
         }
         
+        logger.info("=" * 80)
+        logger.info("🔍 开始获取商品详情")
+        logger.info(f"📡 接口名称: {method}")
+        logger.info(f"🆔 商品ID: {item_id}")
+        logger.info(f"📝 请求字段: {params['fields']}")
+        logger.info("⚠️ 商品详情功能暂未实现真实API")
+        logger.info("=" * 80)
+        
         try:
-            # 模拟API响应，实际使用时替换为真实API调用
-            # result = self._request(method, params)
+            # 这里应该调用真实的商品详情API
+            # 目前没有真实API，直接返回 None
+            logger.info("📭 返回空结果（未实现真实API）")
+            return None
             
-            # 模拟数据，实际使用时应解析API返回的数据
-            return ProductBase(
-                item_id=item_id,
-                title=f"商品详情{item_id}",
-                price="199.00",
-                original_price="299.00",
-                description="这是一个测试商品的详细描述，包含了商品的各种特性和使用方法。",
-                image_url="https://example.com/detail_image.jpg",
-                detail_url=f"https://item.taobao.com/item.htm?id={item_id}",
-                category="详情测试分类",
-                shop_name="详情测试店铺",
-                rating="4.8",
-                sales="2500",
-                metadata={
-                    "brand": "测试品牌",
-                    "material": "高级材质",
-                    "size": "均码",
-                    "color": "多色可选",
-                    "shipping": "免运费",
-                    "return_policy": "7天无理由退换"
-                }
-            )
         except Exception as e:
-            print(f"获取商品详情失败: {e}")
+            logger.error(f"❌ 获取商品详情失败: {e}")
             return None
     
     def get_logistics_info(self, order_id: str) -> Dict[str, Any]:
         """获取物流信息
         
-        模拟物流查询功能
+        物流查询功能
         """
-        # 模拟物流信息
-        return {
-            "order_id": order_id,
-            "logistics_company": "测试快递",
-            "tracking_number": f"YT{order_id}2023",
-            "status": "运输中",
-            "details": [
-                {"time": "2023-11-10 10:00:00", "description": "包裹已被揽收"},
-                {"time": "2023-11-10 16:30:00", "description": "包裹到达分拣中心"},
-                {"time": "2023-11-11 08:15:00", "description": "包裹正在配送中"}
-            ]
-        }
+        from app.core.logging import get_logger
+        
+        logger = get_logger(__name__)
+        
+        logger.info("=" * 80)
+        logger.info("🚚 开始查询物流信息")
+        logger.info(f"📦 订单ID: {order_id}")
+        logger.info("⚠️ 物流查询功能暂未实现真实API")
+        logger.info("=" * 80)
+        
+        try:
+            # 这里应该调用真实的物流查询API
+            # 目前没有真实API，直接返回空字典
+            logger.info("📭 返回空结果（未实现真实API）")
+            return {}
+            
+        except Exception as e:
+            logger.error(f"❌ 获取物流信息失败: {e}")
+            return {}
     
     def get_order_info(self, order_id: str) -> Dict[str, Any]:
         """获取订单信息
         
-        模拟订单查询功能
+        订单查询功能
         """
-        # 模拟订单信息
-        return {
-            "order_id": order_id,
-            "status": "已付款",
-            "create_time": "2023-11-09 14:30:00",
-            "pay_time": "2023-11-09 14:35:00",
-            "total_amount": "299.00",
-            "actual_payment": "269.00",
-            "discount": "30.00",
-            "buyer": "test_user",
-            "items": [
-                {
-                    "item_id": "test_item_1",
-                    "title": "测试商品1",
-                    "price": "199.00",
-                    "quantity": 1
-                },
-                {
-                    "item_id": "test_item_2",
-                    "title": "测试商品2",
-                    "price": "100.00",
-                    "quantity": 1
-                }
-            ],
-            "shipping_address": "测试地址",
-            "logistics_status": "运输中"
-        }
+        from app.core.logging import get_logger
+        
+        logger = get_logger(__name__)
+        
+        logger.info("=" * 80)
+        logger.info("📋 开始查询订单信息")
+        logger.info(f"🆔 订单ID: {order_id}")
+        logger.info("⚠️ 订单查询功能暂未实现真实API")
+        logger.info("=" * 80)
+        
+        try:
+            # 这里应该调用真实的订单查询API
+            # 目前没有真实API，直接返回空字典
+            logger.info("📭 返回空结果（未实现真实API）")
+            return {}
+            
+        except Exception as e:
+            logger.error(f"❌ 获取订单信息失败: {e}")
+            return {}

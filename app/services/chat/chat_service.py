@@ -190,8 +190,22 @@ class ChatService:
         Returns:
             聊天响应
         """
+        from app.core.logging import get_logger
+        
+        logger = get_logger(__name__)
+        
+        logger.info("=" * 80)
+        logger.info("💬 开始处理聊天请求")
+        logger.info(f"👤 用户ID: {user_id}")
+        logger.info(f"📝 消息内容: {chat_request.message}")
+        logger.info(f"📋 消息类型: {chat_request.message_type}")
+        logger.info(f"🆔 会话ID: {chat_request.session_id}")
+        logger.info(f"📊 元数据: {chat_request.metadata}")
+        logger.info("=" * 80)
+        
         # 获取或创建会话
         session = self.get_or_create_session(user_id, chat_request.session_id)
+        logger.info(f"📋 使用会话ID: {session.id}")
         
         # 保存用户消息
         user_message = MessageCreate(
@@ -201,17 +215,24 @@ class ChatService:
             message_type=chat_request.message_type,
             metadata=chat_request.metadata
         )
-        self.save_message(user_message)
+        saved_user_message = self.save_message(user_message)
+        logger.info(f"💾 保存用户消息，消息ID: {saved_user_message.id}")
         
         # 获取智能体实例
         agent = self._get_agent(session.id)
+        logger.info(f"🤖 获取智能体实例，会话ID: {session.id}")
         
         # 处理消息
+        logger.info("🔄 开始智能体处理消息...")
         response = await agent.process_message(
             message=chat_request.message,
             message_type=chat_request.message_type,
             metadata=chat_request.metadata
         )
+        logger.info("✅ 智能体处理完成")
+        logger.info(f"📤 智能体响应: {response['message'][:100]}...")
+        logger.info(f"📋 响应类型: {response['message_type']}")
+        logger.info(f"📊 响应元数据: {response['metadata']}")
         
         # 保存助手消息
         assistant_message = MessageCreate(
@@ -221,12 +242,21 @@ class ChatService:
             message_type=response["message_type"],
             metadata=response["metadata"]
         )
-        self.save_message(assistant_message)
+        saved_assistant_message = self.save_message(assistant_message)
+        logger.info(f"💾 保存助手消息，消息ID: {saved_assistant_message.id}")
         
         # 返回响应
-        return ChatResponse(
+        chat_response = ChatResponse(
             session_id=session.id,
             message=response["message"],
             message_type=response["message_type"],
             metadata=response["metadata"]
         )
+        
+        logger.info("=" * 80)
+        logger.info("🎉 聊天请求处理完成")
+        logger.info(f"📋 会话ID: {session.id}")
+        logger.info(f"📤 响应长度: {len(response['message'])} 字符")
+        logger.info("=" * 80)
+        
+        return chat_response

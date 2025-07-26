@@ -21,11 +21,11 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "淘宝智能搜索助手"
     VERSION: str = "1.0.0"
-    DEBUG: bool = Field(default=False, description="Debug mode")
+    DEBUG: bool = Field(default=True, description="Debug mode")  # 启用DEBUG模式
     ENVIRONMENT: str = Field(default="development", description="Environment: development, staging, production")
     
     # 日志设置
-    LOG_LEVEL: str = Field(default="INFO", description="Logging level")
+    LOG_LEVEL: str = Field(default="DEBUG", description="Logging level")  # 设置为DEBUG级别
     LOG_FILE: str = Field(default="logs/app.log", description="Log file path")
     
     # CORS设置

@@ -222,6 +222,7 @@ async function sendMessage() {
 
         if (response.ok) {
             const data = await response.json();
+            
             // 更新会话ID
             currentSessionId = data.session_id;
             // 移除加载消息
@@ -323,6 +324,7 @@ async function uploadImage(event) {
 
 // 添加消息到聊天区域
 function addMessageToChat(role, content, messageType = 'text', metadata = null) {
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
 
@@ -339,6 +341,31 @@ function addMessageToChat(role, content, messageType = 'text', metadata = null) 
     } else if (messageType === 'product' && metadata) {
         // 显示商品信息
         contentDiv.innerHTML = formatProductInfo(metadata);
+    } else if (messageType === 'products') {
+        if (metadata && metadata.products && Array.isArray(metadata.products) && metadata.products.length > 0) {
+            // 显示商品推荐消息
+            let productsHtml = `
+                <div class="products-intro">${content}</div>
+                <div class="products-container">
+            `;
+            
+            metadata.products.forEach((product, index) => {
+                const productHtml = createProductCard(product);
+                productsHtml += productHtml;
+            });
+            
+            productsHtml += `
+                </div>
+            `;
+            
+            contentDiv.innerHTML = productsHtml;
+        } else {
+            // 如果没有商品数据，显示文本内容
+            contentDiv.innerHTML = content;
+        }
+    } else {
+        // 默认处理为文本
+        contentDiv.innerHTML = content;
     }
 
     // 添加时间
@@ -354,6 +381,96 @@ function addMessageToChat(role, content, messageType = 'text', metadata = null) 
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
     return messageDiv;
+}
+
+// 创建商品卡片
+function createProductCard(product) {
+    
+    const price = product.price || '价格未知';
+    const title = product.title || '商品标题未知';
+    const image = product.image_url || product.image || '/static/img/no-image.svg';
+    const similarity = product.similarity ? `相似度: ${product.similarity}` : '';
+    const discount = product.discount ? `折扣: ${product.discount}` : '';
+    const shop = product.shop_name || product.shop || '';
+    const sales = product.sales ? `销量: ${product.sales}` : '';
+    const detailUrl = product.detail_url || '#';
+    
+    // 安全地处理字符串，避免引号问题
+    const safeTitle = title.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    const safeShop = shop.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    const safeDiscount = discount.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    const safeDetailUrl = detailUrl.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    
+    const cardHtml = `
+        <div class="product-card-inline">
+            <div class="product-image-container" onclick="openProductUrl('${safeDetailUrl}', event)" style="cursor: pointer;" title="点击查看商品详情">
+                <img src="${image}" alt="${title}" class="product-image" onerror="this.src='/static/img/no-image.svg'">
+                <div class="product-image-overlay">
+                    <i class="bi bi-box-arrow-up-right"></i>
+                </div>
+            </div>
+            <div class="product-info" onclick="showProductModal('${product.item_id || ''}', '${safeTitle}', '${price}', '${image}', '${safeShop}', '${sales}', '${safeDiscount}')">
+                <div class="product-title">${title}</div>
+                <div class="product-price">¥${price}</div>
+                ${similarity ? `<div class="product-similarity">${similarity}</div>` : ''}
+                ${discount ? `<div class="product-discount">${discount}</div>` : ''}
+                ${shop ? `<div class="product-shop">${shop}</div>` : ''}
+                ${sales ? `<div class="product-sales">${sales}</div>` : ''}
+            </div>
+        </div>
+    `;
+    
+    return cardHtml;
+}
+
+// 打开商品链接
+function openProductUrl(url, event) {
+    // 阻止事件冒泡，避免触发父元素的点击事件
+    if (event) {
+        event.stopPropagation();
+    }
+    
+    console.log('点击商品图片，原始URL:', url); // 调试信息
+    
+    // 检查URL是否有效
+    if (!url || url === '#' || url === '') {
+        console.warn('商品链接无效:', url);
+        alert('抱歉，该商品的详情链接暂时不可用');
+        return;
+    }
+    
+    // 自动添加协议前缀
+    let finalUrl = url;
+    
+    // 如果URL没有协议前缀，根据当前页面协议自动添加
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        // 获取当前页面的协议
+        const currentProtocol = window.location.protocol; // 'http:' 或 'https:'
+        
+        // 如果URL以 '//' 开头，只需要添加协议
+        if (url.startsWith('//')) {
+            finalUrl = currentProtocol + url;
+        } 
+        // 如果URL以域名开头（如 'detail.tmall.com' 或 'item.taobao.com'），添加完整协议
+        else if (url.match(/^[a-zA-Z0-9.-]+\.(com|cn|net|org)/)) {
+            finalUrl = currentProtocol + '//' + url;
+        }
+        // 如果是相对路径，保持原样
+        else {
+            finalUrl = url;
+        }
+    }
+    
+    console.log('处理后的URL:', finalUrl); // 调试信息
+    
+    // 在新标签页中打开商品链接
+    try {
+        console.log('正在打开链接:', finalUrl); // 调试信息
+        window.open(finalUrl, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+        console.error('打开商品链接失败:', error);
+        alert('打开商品链接时出现错误，请稍后再试');
+    }
 }
 
 // 处理消息中的商品链接
@@ -387,12 +504,27 @@ function showProductsModal(products) {
     const productsContainer = document.getElementById('productsContainer');
     productsContainer.innerHTML = '';
 
+    // 检查是否有商品数据
+    if (!products || products.length === 0) {
+        productsContainer.innerHTML = `
+            <div class="col-12 text-center py-5">
+                <div class="empty-state">
+                    <i class="bi bi-search" style="font-size: 3rem; color: #6c757d;"></i>
+                    <h5 class="mt-3 text-muted">暂无商品数据</h5>
+                    <p class="text-muted">当前没有找到相关商品，请尝试其他搜索关键词</p>
+                </div>
+            </div>
+        `;
+        productsModal.show();
+        return;
+    }
+
     products.forEach(product => {
         const productDiv = document.createElement('div');
         productDiv.className = 'col-md-4 mb-3';
         productDiv.innerHTML = `
             <div class="product-card">
-                <img src="${product.image_url || '/static/img/no-image.png'}" class="product-image" alt="${product.title}">
+                <img src="${product.image_url || '/static/img/no-image.svg'}" class="product-image" alt="${product.title}" onerror="this.src='/static/img/no-image.svg'">
                 <div class="product-info">
                     <h5 class="product-title">${product.title}</h5>
                     <div>

@@ -7,6 +7,7 @@ from langchain.tools import BaseTool
 from langchain import hub
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.services.model_factory import ModelFactory
 from app.services.agent.tools import (
     ProductSearchTool,
@@ -15,6 +16,8 @@ from app.services.agent.tools import (
     OrderInfoTool,
     LogisticsInfoTool,
 )
+
+logger = get_logger(__name__)
 
 
 class TaobaoAgent:
@@ -33,8 +36,8 @@ class TaobaoAgent:
             self.llm = ModelFactory.create_model()
         except (ValueError, ImportError) as e:
             # 如果当前配置的模型不可用，回退到OpenAI
-            print(f"警告: 无法创建 {settings.MODEL_PROVIDER} 模型: {e}")
-            print("回退到 OpenAI 模型...")
+            logger.warning(f"无法创建 {settings.MODEL_PROVIDER} 模型: {e}")
+            logger.info("回退到 OpenAI 模型...")
             self.llm = ModelFactory.create_model(provider="openai")
         
         self.tools = self._get_tools()
@@ -73,7 +76,7 @@ class TaobaoAgent:
 5. 当信息不足时，礼貌地询问用户更多细节
 6. 不要编造不存在的信息
 
-使用以下格式回答：
+请严格按照以下格式回答，每个部分都必须包含：
 
 Question: 用户的问题
 Thought: 我需要思考如何回答这个问题
@@ -84,24 +87,41 @@ Observation: 工具的输出结果
 Thought: 我现在知道最终答案了
 Final Answer: 对用户的最终回答
 
+重要格式要求：
+- 必须先写"Thought:"然后是你的思考内容
+- 如果需要使用工具，下一行必须写"Action:"然后是工具名称
+- 工具名称后的下一行必须写"Action Input:"然后是输入参数
+- 工具执行后会有"Observation:"和结果
+- 最后必须写"Thought:"总结，然后"Final Answer:"给出最终回答
+- 不要在格式标识符前后添加额外的文字
+
+示例：
+Question: 帮我找一些运动鞋
+Thought: 用户想要运动鞋推荐，我需要搜索相关商品
+Action: product_search
+Action Input: 运动鞋
+Observation: [搜索结果]
+Thought: 我已经找到了相关的运动鞋，现在可以给出推荐
+Final Answer: 根据您的需求，我为您推荐以下运动鞋...
+
 开始！
 
 Question: {input}
-Thought: {agent_scratchpad}"""
+{agent_scratchpad}"""
 
         prompt = PromptTemplate.from_template(template)
         
         # 创建ReAct智能体（兼容所有模型类型）
         agent = create_react_agent(self.llm, self.tools, prompt)
         
-        # 创建执行器
+        # 创建执行器，增强错误处理
         return AgentExecutor(
             agent=agent,
             tools=self.tools,
             verbose=True,
-            handle_parsing_errors=True,
+            handle_parsing_errors="Check your output and make sure it conforms to the format instructions. Make sure to include 'Action:' after 'Thought:' when using tools.",
             max_iterations=3,
-            early_stopping_method="generate"
+            return_intermediate_steps=True
         )
     
     async def process_message(self, message: str, message_type: str = "text", metadata: Optional[Dict[Any, Any]] = None) -> Dict[str, Any]:
@@ -115,42 +135,119 @@ Thought: {agent_scratchpad}"""
         Returns:
             智能体的响应
         """
+        logger.info("=" * 80)
+        logger.info("🤖 智能体开始处理消息")
+        logger.info(f"📝 消息内容: {message}")
+        logger.info(f"📋 消息类型: {message_type}")
+        logger.info(f"📊 元数据: {metadata}")
+        logger.info(f"🆔 会话ID: {self.session_id}")
+        logger.info("=" * 80)
+        
         try:
             # 处理图片搜索
             if message_type == "image" and metadata and "image_data" in metadata:
+                logger.info("🖼️ 处理图片搜索请求")
+                logger.info(f"📊 图片数据大小: {len(metadata['image_data'])} 字符")
+                
                 # 调用图片搜索工具
                 image_tool = ImageSearchTool()
+                logger.info("🔧 调用图片搜索工具")
                 results = image_tool._run(metadata["image_data"])
+                logger.info(f"📊 图片搜索结果数量: {len(results) if results else 0}")
                 
                 # 构建响应消息
                 if results and not any("error" in r for r in results):
-                    products_info = "\n\n".join([f"商品: {p['title']}\n价格: {p['price']}\n相似度: {p['similarity']}" for p in results[:5]])
-                    response_message = f"我找到了一些与您图片相似的商品:\n\n{products_info}\n\n您对这些商品有兴趣吗？或者您想了解更多关于某个特定商品的信息？"
+                    response_message = f"我找到了 {len(results[:5])} 个与您图片相似的商品，请查看下方的商品推荐："
+                    logger.info(f"✅ 图片搜索成功，返回 {len(results[:5])} 个商品")
+                    return {
+                        "message": response_message,
+                        "message_type": "products",
+                        "metadata": {"products": results[:5]}
+                    }
                 else:
                     response_message = "抱歉，我无法识别这张图片或找不到相似的商品。您可以尝试上传另一张图片，或者直接告诉我您想找什么类型的商品？"
-                
-                return {
-                    "message": response_message,
-                    "message_type": "text",
-                    "metadata": {"products": results[:5] if results else []}
-                }
+                    logger.warning("⚠️ 图片搜索未找到结果")
+                    return {
+                        "message": response_message,
+                        "message_type": "text",
+                        "metadata": {}
+                    }
             
             # 处理文本消息
+            logger.info("📝 处理文本消息")
+            logger.info("🔄 调用智能体执行器...")
             response = await self.agent.ainvoke({
                 "input": message
             })
+            logger.info("✅ 智能体执行完成")
+            logger.info(f"📤 智能体原始响应: {response}")
             
-            return {
-                "message": response["output"],
-                "message_type": "text",
-                "metadata": {}
-            }
+            # 尝试从智能体的中间步骤中提取商品数据
+            logger.info("🔍 提取商品数据...")
+            products_data = self._extract_products_from_response(response)
+            logger.info(f"📊 提取到 {len(products_data)} 个商品")
+            
+            if products_data:
+                # 如果找到了商品数据，返回商品类型的消息
+                logger.info("🛍️ 返回商品推荐响应")
+                return {
+                    "message": f"根据您的需求，我为您推荐以下 {len(products_data)} 个商品：",
+                    "message_type": "products",
+                    "metadata": {"products": products_data}
+                }
+            else:
+                # 普通文本响应
+                agent_response = response.get("output", "抱歉，我无法处理您的请求。")
+                logger.info("💬 返回文本响应")
+                logger.info(f"📤 响应内容: {agent_response[:100]}...")
+                return {
+                    "message": agent_response,
+                    "message_type": "text",
+                    "metadata": {}
+                }
         
         except Exception as e:
             # 处理错误
+            logger.error("=" * 80)
+            logger.error("❌ 智能体处理消息时发生错误")
+            logger.error(f"📝 原始消息: {message}")
+            logger.error(f"📋 消息类型: {message_type}")
+            logger.error(f"🚨 错误详情: {str(e)}")
+            logger.error(f"🔍 错误类型: {type(e).__name__}")
+            logger.error("=" * 80)
+            
             error_message = f"抱歉，处理您的请求时出现了问题: {str(e)}"
             return {
                 "message": error_message,
                 "message_type": "text",
                 "metadata": {"error": str(e)}
             }
+    
+    def _extract_products_from_response(self, agent_response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """从智能体响应中提取商品数据
+        
+        Args:
+            agent_response: 智能体的完整响应
+            
+        Returns:
+            商品数据列表
+        """
+        products = []
+        
+        # 检查中间步骤中是否有工具调用结果
+        if "intermediate_steps" in agent_response:
+            for i, step in enumerate(agent_response["intermediate_steps"]):
+                if len(step) >= 2:
+                    action, observation = step[0], step[1]
+                    
+                    # 检查是否是商品搜索工具的结果
+                    if hasattr(action, 'tool') and action.tool in ['product_search', 'product_detail']:
+                        if isinstance(observation, list) and observation:
+                            # 确保每个商品都有必要的字段
+                            for j, product in enumerate(observation):
+                                if isinstance(product, dict) and 'item_id' in product:
+                                    products.append(product)
+                        elif isinstance(observation, dict) and 'item_id' in observation:
+                            products.append(observation)
+        
+        return products[:5]  # 最多返回5个商品

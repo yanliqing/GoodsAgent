@@ -13,15 +13,18 @@ def setup_logging() -> None:
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
     
-    # Configure logging format
-    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    # Configure logging format with more detailed information
+    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s"
+    
+    # Set log level to DEBUG to capture all our debug logs
+    log_level = logging.DEBUG if settings.DEBUG or settings.is_development else getattr(logging, settings.LOG_LEVEL.upper())
     
     # Configure root logger
     logging.basicConfig(
-        level=getattr(logging, settings.LOG_LEVEL.upper()),
+        level=log_level,
         format=log_format,
         handlers=[
-            logging.FileHandler(log_dir / "app.log"),
+            logging.FileHandler(log_dir / "app.log", encoding='utf-8'),
             logging.StreamHandler(sys.stdout)
         ]
     )
@@ -31,10 +34,19 @@ def setup_logging() -> None:
         "uvicorn": logging.INFO,
         "sqlalchemy.engine": logging.WARNING,
         "httpx": logging.WARNING,
+        # Enable our application loggers
+        "app.services.taobao.api": logging.DEBUG,
+        "app.services.agent": logging.DEBUG,
+        "app.services.chat": logging.DEBUG,
+        "app.api.endpoints": logging.DEBUG,
     }
     
     for logger_name, level in loggers.items():
         logging.getLogger(logger_name).setLevel(level)
+    
+    # Log the current configuration
+    logger = logging.getLogger(__name__)
+    logger.info(f"Logging configured - Level: {logging.getLevelName(log_level)}, Debug: {settings.DEBUG}")
 
 
 def get_logger(name: str) -> logging.Logger:
