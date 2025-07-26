@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>淘宝智能搜索助手</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 侧边栏 -->
+            <div class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse" id="sidebarMenu">
+                <div class="position-sticky pt-3">
+                    <div class="d-flex justify-content-between align-items-center px-3 mb-3">
+                        <h5 class="sidebar-heading">会话列表</h5>
+                        <button class="btn btn-sm btn-primary" id="newChatBtn">
+                            <i class="bi bi-plus-lg"></i> 新会话
+                        </button>
+                    </div>
+                    <ul class="nav flex-column" id="chatSessionsList">
+                        <!-- 会话列表将通过JavaScript动态加载 -->
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 主内容区 -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">淘宝智能搜索助手</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <div class="btn-group me-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary d-md-none" data-bs-toggle="collapse" data-bs-target="#sidebarMenu">
+                                <i class="bi bi-list"></i> 会话列表
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="loginBtn">
+                                <i class="bi bi-person"></i> 登录
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="registerBtn">
+                                <i class="bi bi-person-plus"></i> 注册
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 聊天区域 -->
+                <div class="chat-container" id="chatContainer">
+                    <div class="chat-messages" id="chatMessages">
+                        <!-- 欢迎消息 -->
+                        <div class="message assistant">
+                            <div class="message-content">
+                                <p>你好！我是淘宝智能搜索助手，可以帮你：</p>
+                                <ul>
+                                    <li>搜索淘宝商品</li>
+                                    <li>通过图片找相似商品</li>
+                                    <li>提供商品推荐</li>
+                                    <li>查询订单和物流信息</li>
+                                    <li>解答购物相关问题</li>
+                                </ul>
+                                <p>请问有什么可以帮到你的吗？</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 输入区域 -->
+                    <div class="chat-input-container">
+                        <div class="input-group">
+                            <button class="btn btn-outline-secondary" type="button" id="uploadImageBtn">
+                                <i class="bi bi-image"></i>
+                            </button>
+                            <input type="text" class="form-control" placeholder="输入你的问题..." id="messageInput">
+                            <button class="btn btn-primary" type="button" id="sendMessageBtn">
+                                <i class="bi bi-send"></i>
+                            </button>
+                        </div>
+                        <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 登录模态框 -->
+    <div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loginModalLabel">登录</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label for="loginUsername" class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="loginUsername" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="loginPassword" class="form-label">密码</label>
+                            <input type="password" class="form-control" id="loginPassword" required>
+                        </div>
+                        <div class="alert alert-danger" id="loginError" style="display: none;"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="loginSubmitBtn">登录</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 注册模态框 -->
+    <div class="modal fade" id="registerModal" tabindex="-1" aria-labelledby="registerModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="registerModalLabel">注册</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="registerForm">
+                        <div class="mb-3">
+                            <label for="registerUsername" class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="registerUsername" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="registerEmail" class="form-label">邮箱</label>
+                            <input type="email" class="form-control" id="registerEmail" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="registerPassword" class="form-label">密码</label>
+                            <input type="password" class="form-control" id="registerPassword" required>
+                        </div>
+                        <div class="alert alert-danger" id="registerError" style="display: none;"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="registerSubmitBtn">注册</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 商品展示模态框 -->
+    <div class="modal fade" id="productsModal" tabindex="-1" aria-labelledby="productsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="productsModalLabel">商品列表</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row" id="productsContainer">
+                        <!-- 商品将通过JavaScript动态加载 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
